@@ -1,5 +1,7 @@
 ### Hi there 👋
 
+## Kusunoki Samurai
+#### Kusunoki Samurai is a fully immersive Metaverse blockchain-driven gaming experience.
 <!--
 **kusunokisamurai/kusunokisamurai** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
 
