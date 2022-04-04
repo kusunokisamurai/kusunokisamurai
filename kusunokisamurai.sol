@@ -714,7 +714,7 @@ contract KUSUNOKI is Context, IERC20, Ownable {
     uint256 private _previousBurnFee = _burnFee;
     address public deadAddress = 0x000000000000000000000000000000000000dEaD;
 
-    uint256 public _marketingFee = 5;
+    uint256 public _marketingFee = 0;
     uint256 private _previousmarketingFee = _marketingFee;
     address payable public marketingWallet = 0xaD255aD4ecC8258b436fB1FEe540F1c488C9e060; 
     
