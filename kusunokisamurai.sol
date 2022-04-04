@@ -395,7 +395,7 @@ library Address {
  * the owner.
  */
 contract Ownable is Context {
-    address private _owner;
+    address payable private _owner;
     address private _previousOwner;
     uint256 private _lockTime;
 
@@ -425,17 +425,18 @@ contract Ownable is Context {
         _;
     }
 
-     /**
+    /**
      * @dev Leaves the contract without owner. It will not be possible to call
      * `onlyOwner` functions anymore. Can only be called by the current owner.
      *
      * NOTE: Renouncing ownership will leave the contract without an owner,
      * thereby removing any functionality that is only available to the owner.
      */
-    function renounceOwnership() public virtual onlyOwner {
-        emit OwnershipTransferred(_owner, address(0));
-        _owner = address(0);
-    }
+    // deleted this function for security issues
+    // function renounceOwnership() public virtual onlyOwner {
+    //     emit OwnershipTransferred(_owner, address(0));
+    //     _owner = address(0);
+    // }
 
     /**
      * @dev Transfers ownership of the contract to a new account (`newOwner`).
@@ -715,7 +716,7 @@ contract KUSUNOKI is Context, IERC20, Ownable {
 
     uint256 public _marketingFee = 5;
     uint256 private _previousmarketingFee = _marketingFee;
-    address public marketingWallet = 0xaD255aD4ecC8258b436fB1FEe540F1c488C9e060; 
+    address payable public marketingWallet = 0xaD255aD4ecC8258b436fB1FEe540F1c488C9e060; 
     
 
     IUniswapV2Router02 public  uniswapV2Router;
@@ -725,8 +726,8 @@ contract KUSUNOKI is Context, IERC20, Ownable {
     bool public swapAndLiquifyEnabled = true;
 
     uint256 public numTokensSellToAddToLiquidity = 1600000000000000 * 10**18;
-    uint256 public _maxTxAmount = 80000000000000000 * 10**18;
-    uint256 public maxWalletToken = 80000000000000000 * 10**18;
+    uint256 public _maxTxAmount = 800000000000000 * 10**18;   // changed from 100% of _tTotal to 1%
+    uint256 public maxWalletToken = 800000000000000 * 10**18;   // changed from 100% of _tTotal to 1%
     
     event MinTokensBeforeSwapUpdated(uint256 minTokensBeforeSwap);
     event SwapAndLiquifyEnabledUpdated(bool enabled);
@@ -783,6 +784,7 @@ contract KUSUNOKI is Context, IERC20, Ownable {
     }
 
     function transfer(address recipient, uint256 amount) public override returns (bool) {
+        require(balanceOf(recipient) + amount <= maxWalletToken);   // anti-whaling tactics
         _transfer(_msgSender(), recipient, amount);
         return true;
     }
@@ -797,6 +799,7 @@ contract KUSUNOKI is Context, IERC20, Ownable {
     }
 
     function transferFrom(address sender, address recipient, uint256 amount) public override returns (bool) {
+        require(balanceOf(recipient) + amount <= maxWalletToken);  // anti-whaling tactics
         _transfer(sender, recipient, amount);
         _approve(sender, _msgSender(), _allowances[sender][_msgSender()].sub(amount, "ERC20: transfer amount exceeds allowance"));
         return true;
@@ -851,6 +854,7 @@ contract KUSUNOKI is Context, IERC20, Ownable {
         for (uint256 i = 0; i < _excluded.length; i++) {
             if (_excluded[i] == account) {
                 _excluded[i] = _excluded[_excluded.length - 1];
+                _rOwned[account] = _tOwned[account].mul(_getRate());   //update _rOwned[account]
                 _tOwned[account] = 0;
                 _isExcluded[account] = false;
                 _excluded.pop();
@@ -860,6 +864,8 @@ contract KUSUNOKI is Context, IERC20, Ownable {
     }
 
     function excludeFromReward(address account) public onlyOwner() {
+        require(account != deadAddress, "deadAddress cannot be excluded");         // check for deadAddress
+        require(account != marketingWallet, "marketingWallet cannot be excluded");  // check for marketingWallet
         require(!_isExcluded[account], "Account is already excluded");
         if(_rOwned[account] > 0) {
             _tOwned[account] = tokenFromReflection(_rOwned[account]);
@@ -1032,6 +1038,14 @@ contract KUSUNOKI is Context, IERC20, Ownable {
         emit SwapAndLiquify(half, newBalance, otherHalf);
     }
 
+    // Contract gains ETH via the swapAndLiquify() function
+    // So added new withdraw function as counter measure
+
+    // Function to withdraw ETH from contract 
+    function withdrawETH() public onlyOwner {
+        payable(marketingWallet).transfer(address(this).balance);
+    }
+
     function swapTokensForEth(uint256 tokenAmount) private {
         // generate the uniswap pair path of token -> weth
         address[] memory path = new address[](2);
@@ -1060,7 +1074,8 @@ contract KUSUNOKI is Context, IERC20, Ownable {
             tokenAmount,
             0, // slippage is unavoidable
             0, // slippage is unavoidable
-            owner(),
+            // owner()
+            address(this),   // changed from owner to address(this)
             block.timestamp
         );
     }
@@ -1081,10 +1096,11 @@ contract KUSUNOKI is Context, IERC20, Ownable {
             _transferFromExcluded(sender, recipient, amount);
         } else if (!_isExcluded[sender] && _isExcluded[recipient]) {
             _transferToExcluded(sender, recipient, amount);
-        } else if (!_isExcluded[sender] && !_isExcluded[recipient]) {
-            _transferStandard(sender, recipient, amount);
         } else if (_isExcluded[sender] && _isExcluded[recipient]) {
             _transferBothExcluded(sender, recipient, amount);
+        //    } else if (!_isExcluded[sender] && !_isExcluded[recipient]) {
+        //    _transferStandard(sender, recipient, amount);
+        //   removed redundant code
         } else {
             _transferStandard(sender, recipient, amount);
         }
@@ -1161,7 +1177,8 @@ contract KUSUNOKI is Context, IERC20, Ownable {
         _isExcludedFromFee[account] = true;
     }
     
-    function setMaxWalletTokend(uint256 _maxToken) external onlyOwner {
+    function setMaxWalletToken(uint256 _maxToken) external onlyOwner {
+        require(_maxToken > 10000, "Maximum Token must be greater than 10000");  // maxWalletToken lower limit set
   	    maxWalletToken = _maxToken * (10**18);
   	}
 
@@ -1179,11 +1196,17 @@ contract KUSUNOKI is Context, IERC20, Ownable {
     }
     
     function setMaxTxAmount(uint256 maxTxAmount) external onlyOwner() {
-        require(maxTxAmount > 0, "transaction amount must be greater than zero");
+        require(maxTxAmount > 10000, "Maximum transaction amount must be greater than 10000");  // max transaction amount lower limit set
         _maxTxAmount = maxTxAmount * (10**18);
     }
     
     function setFees(uint256 taxFee, uint256 liquidityFee, uint256 marketingFee, uint256 burnFee) external onlyOwner() {
+        
+        // added upper limits to fees
+        require(taxFee < 20, "taxFee is too large");
+        require(liquidityFee < 20, "taxFee is too large");
+        require(marketingFee < 20, "taxFee is too large");
+        require(burnFee < 20, "taxFee is too large");
         _taxFee = taxFee;
         _liquidityFee = liquidityFee;
         _marketingFee = marketingFee;
